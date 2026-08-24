@@ -1,0 +1,18 @@
+# Virtual environments
+.venv310/
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Model files (large binaries)
+models/*.task
+
+# IDE
+.vscode/
+.idea/
