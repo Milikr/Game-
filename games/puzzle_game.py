@@ -27,6 +27,7 @@ from utils.cv_utils import (
     WHITE, BLACK, GOLD, BG_COLOR, GREY,
     DARK_PINK, PINK, TEAL, DARK_TEAL, RED, GREEN
 )
+from utils import audio_utils
 
 # Path to hand landmarker model
 _MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'models', 'hand_landmarker.task')
@@ -142,14 +143,12 @@ class PuzzleGame:
 
     # ── public ──────────────────────────────────────────────────
     def reset(self):
-        # We place shapes on the left, targets on the right.
-        # Actual positions will be set once we know frame size
-        # (set in first call to process).
-        self.shapes      = None
-        self.targets     = None
-        self.grabbed     = None     # index into self.shapes
-        self.game_won    = False
-        self.frame_size  = None
+        self.shapes          = None
+        self.targets         = None
+        self.grabbed         = None
+        self.game_won        = False
+        self.frame_size      = None
+        self._win_played     = False
 
     def process(self, frame):
         h, w = frame.shape[:2]
@@ -211,8 +210,12 @@ class PuzzleGame:
                 cv2.circle(frame, (finger_x, finger_y), GRAB_RADIUS, PINK, 1)
 
         # ── win check ───────────────────────────────────────────
+        was_won = self.game_won
         if all(s.placed for s in self.shapes):
             self.game_won = True
+        if self.game_won and not was_won and not self._win_played:
+            audio_utils.play('win')
+            self._win_played = True
 
         # ── HUD / result ─────────────────────────────────────────
         self._draw_hud(frame, w, h)
@@ -235,6 +238,7 @@ class PuzzleGame:
         self.targets = [Target(k, right_x, ys[i]) for i, k in enumerate(kinds)]
 
     def _update_drag(self, fx, fy):
+        prev_grabbed = self.grabbed
         # If we have a grabbed shape, move it with the finger
         if self.grabbed is not None:
             s = self.shapes[self.grabbed]
@@ -249,6 +253,7 @@ class PuzzleGame:
                 s.placed  = True
                 t.filled  = True
                 self.grabbed = None
+                audio_utils.play('snap')   # satisfying snap sound
             return
 
         # Try to grab the closest un-placed shape
@@ -262,6 +267,8 @@ class PuzzleGame:
                 best_dist = dist
                 best_idx  = i
         self.grabbed = best_idx
+        if self.grabbed is not None and prev_grabbed is None:
+            audio_utils.play('grab')   # whoosh when first grabbing
 
     def _draw_hud(self, frame, w, h):
         # top bar
