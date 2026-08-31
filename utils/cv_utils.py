@@ -1,19 +1,47 @@
 import cv2
 import numpy as np
 
-# ─────────────────────────── colours ──────────────────────────────
-PINK        = (177,  63, 177)
-DARK_PINK   = (120,  20, 120)
-TEAL        = ( 20, 200, 200)
-DARK_TEAL   = (  0, 120, 120)
-WHITE       = (255, 255, 255)
-BLACK       = (  0,   0,   0)
-RED         = ( 30,  30, 220)   # BGR
-GREEN       = ( 30, 200,  30)
-GOLD        = ( 30, 215, 255)
-GREY        = ( 60,  60,  60)
-LIGHT_GREY  = (180, 180, 180)
-BG_COLOR    = ( 12,  12,  22)   # very dark navy
+# =============================================================================
+#  COLOUR PALETTE  (OpenCV BGR -- not RGB)
+#  CSS variable -> hex -> BGR mapping:
+#
+#  --primary-pink     #FF1493  -> BGR (147, 20, 255)
+#  --primary-teal     #00FFFF  -> BGR (255, 255, 0)
+#  --health-green     #00FF00  -> BGR (0, 255, 0)
+#  --health-yellow    #FFD700  -> BGR (0, 215, 255)
+#  --bg-concrete-dark          -> BGR (10, 10, 18)
+#  --panel-bg-dark             -> BGR (18, 20, 32)
+#  --text-light-grey  #C8CBD4  -> BGR (212, 203, 200)
+#  --button-inactive  #404550  -> BGR (72, 69, 64)
+# =============================================================================
+
+# Primary neons
+NEON_PINK        = (147,  20, 255)   # #FF1493 - clock, critical, active borders
+ELECTRIC_MAGENTA = (147,  20, 255)   # alias
+NEON_GREEN       = (  0, 255,   0)   # #00FF00 - health FULL square
+TEAL             = (255, 255,   0)   # #00FFFF - player name, JOIN GAME
+DARK_TEAL        = (160, 160,   0)   # dimmer cyan fill
+
+# Health bar colours
+HEALTH_GREEN  = (  0, 255,   0)   # #00FF00 FULL
+HEALTH_YELLOW = (  0, 215, 255)   # #FFD700 WARNING
+HEALTH_PINK   = (147,  20, 255)   # #FF1493 CRITICAL
+
+# Neutrals
+WHITE      = (255, 255, 255)
+BLACK      = (  0,   0,   0)
+CHARCOAL   = ( 28,  28,  28)
+DEEP_BLACK = ( 10,  10,  10)
+GREY       = ( 60,  60,  60)
+LIGHT_GREY = (212, 203, 200)   # #C8CBD4 body text
+BG_COLOR   = ( 10,  10,  18)   # --bg-concrete-dark
+
+# Legacy aliases
+PINK      = (147,  20, 255)
+DARK_PINK = ( 80,  10, 140)
+RED       = ( 30,  30, 220)
+GREEN     = (  0, 200,   0)
+GOLD      = (  0, 215, 255)   # #FFD700
 
 # ─────────────────────────── fonts ────────────────────────────────
 FONT        = cv2.FONT_HERSHEY_DUPLEX
@@ -83,3 +111,122 @@ def glow_circle(frame, cx, cy, r, color, layers=4):
         frame = cv2.addWeighted(frame, 1 - alpha, overlay, alpha, 0)
     cv2.circle(frame, (cx, cy), r, color, -1)
     return frame
+
+def draw_distressed_button(frame, x1, y1, x2, y2, label, color, icon_type, hovered=False):
+    """Draws a distressed physical button with crack lines and an icon."""
+    draw_col = tuple(min(255, c + 40) for c in color) if hovered else color
+    # Base button
+    cv2.rectangle(frame, (x1, y1), (x2, y2), draw_col, -1)
+    
+    # Shadow/3D effect
+    cv2.rectangle(frame, (x1, y2 - 8), (x2, y2), tuple(max(0, c - 50) for c in draw_col), -1)
+    
+    # Border
+    cv2.rectangle(frame, (x1, y1), (x2, y2), CHARCOAL, 3)
+    
+    # Distressed cracks (randomized but deterministic based on coords)
+    np.random.seed(x1 + y1)
+    for _ in range(5):
+        cx = np.random.randint(x1 + 10, x2 - 10)
+        cy = np.random.randint(y1 + 10, y2 - 10)
+        cv2.line(frame, (cx, cy), (cx + np.random.randint(-15, 15), cy + np.random.randint(-15, 15)), CHARCOAL, 1)
+        
+    # Icon
+    icon_y = y1 + (y2 - y1) // 2
+    if icon_type == 'triangle':
+        pts = np.array([[x1 + 25, icon_y - 12], [x1 + 13, icon_y + 12], [x1 + 37, icon_y + 12]], np.int32)
+        cv2.polylines(frame, [pts], True, CHARCOAL, 3)
+    elif icon_type == 'circle':
+        cv2.circle(frame, (x1 + 25, icon_y), 12, CHARCOAL, 3)
+        
+    # Text
+    cv2.putText(frame, label, (x1 + 55, icon_y + 8), FONT_BOLD, 0.7, CHARCOAL, 2, cv2.LINE_AA)
+    return x1 <= x2 and y1 <= y2 # Dummy return, collision logic will be in main
+
+def draw_health_meter(frame, x, y):
+    """Draws the custom health meter with geometric shapes."""
+    # Background box
+    cv2.rectangle(frame, (x, y), (x + 220, y + 80), CHARCOAL, -1)
+    cv2.rectangle(frame, (x, y), (x + 220, y + 80), LIGHT_GREY, 2)
+    cv2.putText(frame, "HEALTH", (x + 10, y + 25), FONT_BOLD, 0.6, WHITE, 1, cv2.LINE_AA)
+    
+    # Full (Square)
+    cv2.rectangle(frame, (x + 10, y + 40), (x + 30, y + 60), GREEN, -1)
+    cv2.putText(frame, "[FULL]", (x + 40, y + 55), FONT, 0.4, GREEN, 1, cv2.LINE_AA)
+    
+    # Warning (Triangle)
+    pts = np.array([[x + 100, y + 40], [x + 90, y + 60], [x + 110, y + 60]], np.int32)
+    cv2.polylines(frame, [pts], True, GOLD, 2)
+    cv2.putText(frame, "[WARN]", (x + 120, y + 55), FONT, 0.4, GOLD, 1, cv2.LINE_AA)
+    
+    # Critical (Circle)
+    cv2.circle(frame, (x + 185, y + 50), 10, ELECTRIC_MAGENTA, 2)
+    
+def draw_wireframe_hand(frame, x, y, color, scale=1.0):
+    """Draws a stylistic wireframe hand for the HUD."""
+    pts = [
+        (0, 0), (-10, -30), (-15, -60), (-20, -30), # thumb
+        (-5, -40), (-10, -80), (0, -40), # index
+        (10, -45), (10, -85), (10, -45), # middle
+        (25, -35), (25, -75), (20, -35), # ring
+        (35, -20), (40, -50), (30, -20), # pinky
+        (25, 20), (-5, 20) # wrist
+    ]
+    scaled_pts = [(int(px * scale + x), int(py * scale + y)) for px, py in pts]
+    for i in range(len(scaled_pts) - 1):
+        cv2.line(frame, scaled_pts[i], scaled_pts[i+1], color, 1, cv2.LINE_AA)
+    for px, py in scaled_pts:
+        cv2.circle(frame, (px, py), 2, color, -1)
+
+def draw_vcr_clock(frame, x, y, text):
+    """Draws a glowing VCR-style clock."""
+    # Glow
+    for i in range(3, 0, -1):
+        cv2.putText(frame, text, (x, y), FONT_BOLD, 1.2, NEON_PINK, 2 + i * 2, cv2.LINE_AA)
+    # Core
+    cv2.putText(frame, text, (x, y), FONT_BOLD, 1.2, WHITE, 2, cv2.LINE_AA)
+
+def draw_neon_card(frame, x, y, cw, ch, room, title, subtitle, desc, key, anim_t, highlighted=False):
+    x2, y2 = x + cw, y + ch
+    cx = x + cw // 2
+    
+    # Base background (deep black)
+    cv2.rectangle(frame, (x, y), (x2, y2), DEEP_BLACK, -1)
+    
+    # Outer glow / border
+    border_col = NEON_GREEN if highlighted else NEON_PINK
+    border_t = 3 if highlighted else 2
+    draw_rounded_rect(frame, x, y, x2, y2, 14, border_col, border_t)
+    
+    # Subtle inner glow
+    if highlighted:
+        overlay = frame.copy()
+        draw_rounded_rect(overlay, x, y, x2, y2, 14, NEON_GREEN, -1)
+        frame[:] = cv2.addWeighted(frame, 0.85, overlay, 0.15, 0)
+        
+    # Room text
+    (tw, _), _ = cv2.getTextSize(room, FONT_BOLD, 0.80, 2)
+    tx = x + (cw - tw) // 2
+    cv2.putText(frame, room, (tx, y + 35), FONT_BOLD, 0.80, WHITE, 2, cv2.LINE_AA)
+    
+    cv2.line(frame, (x + 15, y + 50), (x2 - 15, y + 50), NEON_PINK, 1)
+    
+    # Title
+    (tw, _), _ = cv2.getTextSize(title, FONT_BOLD, 0.72, 2)
+    cv2.putText(frame, title, (x + (cw - tw) // 2, y + 80), FONT_BOLD, 0.72, border_col, 2, cv2.LINE_AA)
+    
+    # Subtitle
+    (tw, _), _ = cv2.getTextSize(subtitle, FONT, 0.50, 1)
+    cv2.putText(frame, subtitle, (x + (cw - tw) // 2, y + 105), FONT, 0.50, (200, 200, 200), 1, cv2.LINE_AA)
+    
+    # Desc
+    for li, line in enumerate(desc):
+        (tw, _), _ = cv2.getTextSize(line, FONT, 0.52, 1)
+        cv2.putText(frame, line, (x + (cw - tw) // 2, y + 140 + li * 24), FONT, 0.52, (230, 230, 230), 1, cv2.LINE_AA)
+        
+    # Press Key
+    pulse = 0.5 + 0.5 * abs(np.sin(anim_t * 3))
+    hint_col = tuple(int(c * pulse) for c in border_col)
+    hint_text = f"[ PRESS {key} ]"
+    (tw, _), _ = cv2.getTextSize(hint_text, FONT_BOLD, 0.58, 2)
+    cv2.putText(frame, hint_text, (x + (cw - tw) // 2, y + ch - 15), FONT_BOLD, 0.58, hint_col, 2, cv2.LINE_AA)
